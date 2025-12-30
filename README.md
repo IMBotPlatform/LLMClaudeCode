@@ -15,7 +15,7 @@
 import (
     "context"
 
-    "github.com/IMBotPlatform/LLMClaudeCode/claudecode"
+    "github.com/IMBotPlatform/LLMClaudeCode/pkg"
     "github.com/tmc/langchaingo/llms"
 )
 
@@ -29,3 +29,14 @@ if err != nil {
 resp, err := llms.GenerateFromSinglePrompt(context.Background(), llm, "Hello")
 ```
 
+## GLM 测试
+
+设置 `AUTH_TOKEN` 后运行测试：
+
+```bash
+AUTH_TOKEN=你的密钥 go test -v -run TestLLMGLM -count=1 ./pkg
+```
+
+说明：
+- 流式内容输出到 stdout
+- chunk 元信息（时间戳/长度）输出到 stderr
