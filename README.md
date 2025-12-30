@@ -29,23 +29,3 @@ if err != nil {
 resp, err := llms.GenerateFromSinglePrompt(context.Background(), llm, "Hello")
 ```
 
-## Docker
-
-构建镜像：
-
-```bash
-docker build -t imbot-claudecode .
-```
-
-运行示例：
-
-```bash
-docker run --rm -e ANTHROPIC_API_KEY=xxx imbot-claudecode "Hello Claude"
-```
-
-CLI 可通过 `-cli` 指定路径：
-
-```bash
-docker run --rm imbot-claudecode -cli /usr/local/bin/claude "Hello"
-```
-

@@ -1,0 +1,17 @@
+# --- Go build/test artifacts ---
+*.exe
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# --- Go workspace / dependencies ---
+vendor/
+go.work
+go.work.sum
+
+# --- OS / IDE ---
+.DS_Store
+.idea/
+.vscode/
