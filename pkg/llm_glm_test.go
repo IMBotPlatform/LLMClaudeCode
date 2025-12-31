@@ -47,7 +47,7 @@ func TestLLMGLM(t *testing.T) {
 	// 初始化 Claude Code LLM。
 	llm, err := New(opts...)
 	if err != nil {
-		t.Fatalf("init claudecode: %v", err)
+		t.Fatalf("init claude code: %v", err)
 	}
 
 	// 调用模型生成响应。
@@ -56,13 +56,14 @@ func TestLLMGLM(t *testing.T) {
 	streamingFunc := func(_ context.Context, chunk []byte) error {
 		// 元信息输出到 stderr，内容输出到 stdout。
 		timestamp := time.Now().Format(time.RFC3339Nano)
+		fmt.Fprintln(os.Stderr)
 		fmt.Fprintf(os.Stderr, "[chunk] ts=%s len=%d\n", timestamp, len(chunk))
 		fmt.Print(string(chunk))
 		return nil
 	}
 	resp, err := llms.GenerateFromSinglePrompt(ctx, llm, prompt, llms.WithStreamingFunc(streamingFunc))
 	if err != nil {
-		t.Fatalf("claudecode error: %v", err)
+		t.Fatalf("claude code error: %v", err)
 	}
 	fmt.Println("\n\n[end] done")
 

@@ -25,11 +25,11 @@ func TestLLMDeepSeek(t *testing.T) {
 
 	// 使用 DeepSeek 默认环境变量配置。
 	env := map[string]string{
-		"ANTHROPIC_AUTH_TOKEN": authToken,
-		"ANTHROPIC_BASE_URL":   "https://api.deepseek.com/anthropic",
-		"API_TIMEOUT_MS":       "600000",
-		"ANTHROPIC_MODEL":      "deepseek-chat",
-		"ANTHROPIC_SMALL_FAST_MODEL": "deepseek-chat",
+		"ANTHROPIC_AUTH_TOKEN":                     authToken,
+		"ANTHROPIC_BASE_URL":                       "https://api.deepseek.com/anthropic",
+		"API_TIMEOUT_MS":                           "600000",
+		"ANTHROPIC_MODEL":                          "deepseek-chat",
+		"ANTHROPIC_SMALL_FAST_MODEL":               "deepseek-chat",
 		"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
 	}
 

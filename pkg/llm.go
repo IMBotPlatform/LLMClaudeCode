@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -88,47 +89,55 @@ func (l *LLM) Call(ctx context.Context, prompt string, options ...llms.CallOptio
 // 返回：统一的 ContentResponse 与错误。
 func (l *LLM) GenerateContent(ctx context.Context, messages []llms.MessageContent, options ...llms.CallOption) (*llms.ContentResponse, error) { //nolint:lll
 	if l == nil {
-		return nil, errors.New("claudecode: nil receiver")
+		return nil, errors.New("claude code: nil receiver")
 	}
 
+	// 解析调用参数，汇总到统一的 CallOptions。
 	callOpts := llms.CallOptions{}
 	for _, opt := range options {
 		opt(&callOpts)
 	}
 
+	// 拆分 system 消息与普通消息，避免混入非 system 内容。
 	systemFromMessages, nonSystem, err := splitSystemMessages(messages)
 	if err != nil {
 		return nil, err
 	}
 
+	// 合并系统提示词并构建最终 prompt。
 	systemPrompt := mergeSystemPrompt(l.opts.SystemPrompt, systemFromMessages)
 	prompt, err := buildPrompt(nonSystem)
 	if err != nil {
 		return nil, err
 	}
+	// 保障 prompt 非空，避免无效调用。
 	if strings.TrimSpace(prompt) == "" {
 		return nil, ErrEmptyPrompt
 	}
 
+	// 构建 Claude CLI 命令并注入运行环境。
 	cmd := l.buildCommand(ctx, prompt, systemPrompt)
 	cmd.Env = mergeEnv(os.Environ(), l.opts.Env)
 	if l.opts.Cwd != "" {
 		cmd.Dir = l.opts.Cwd
 	}
 
+	// 建立 stdout/stderr 管道，便于流式读取与错误收集。
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
-		return nil, fmt.Errorf("claudecode: stdout pipe: %w", err)
+		return nil, fmt.Errorf("claude code: stdout pipe: %w", err)
 	}
 	stderr, err := cmd.StderrPipe()
 	if err != nil {
-		return nil, fmt.Errorf("claudecode: stderr pipe: %w", err)
+		return nil, fmt.Errorf("claude code: stderr pipe: %w", err)
 	}
 
+	// 启动 CLI 子进程。
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("claudecode: start cli: %w", err)
+		return nil, fmt.Errorf("claude code: start cli: %w", err)
 	}
 
+	// 异步收集 stderr，防止阻塞主流程。
 	var stderrBuf bytes.Buffer
 	stderrDone := make(chan struct{})
 	go func() {
@@ -136,23 +145,27 @@ func (l *LLM) GenerateContent(ctx context.Context, messages []llms.MessageConten
 		close(stderrDone)
 	}()
 
+	// 读取流式输出并捕获生成信息。
 	responseText, genInfo, streamErr := l.readStream(ctx, stdout, callOpts.StreamingFunc)
 	if streamErr != nil {
+		// 出错时强制终止子进程并等待 stderr 收集完成。
 		_ = cmd.Process.Kill()
 		<-stderrDone
 		return nil, streamErr
 	}
 
+	// 等待子进程结束并处理可能的 CLI 失败信息。
 	if err := cmd.Wait(); err != nil {
 		<-stderrDone
 		errText := strings.TrimSpace(stderrBuf.String())
 		if errText != "" {
-			return nil, fmt.Errorf("claudecode: cli failed: %w: %s", err, errText)
+			return nil, fmt.Errorf("claude code: cli failed: %w: %s", err, errText)
 		}
-		return nil, fmt.Errorf("claudecode: cli failed: %w", err)
+		return nil, fmt.Errorf("claude code: cli failed: %w", err)
 	}
 	<-stderrDone
 
+	// 封装为统一的 ContentResponse 返回。
 	choice := &llms.ContentChoice{
 		Content:        responseText,
 		GenerationInfo: genInfo,
@@ -205,6 +218,10 @@ func (l *LLM) buildCommand(ctx context.Context, prompt string, systemPrompt stri
 	// Use --print with delimiter to avoid prompt being parsed as flags.
 	args = append(args, "--print", "--", prompt)
 
+	// 命令样式示例：claude --output-format stream-json --verbose ... --print -- <prompt>
+	// 注意：此处会完整输出 prompt，便于排查命令拼装是否正确。
+	log.Printf("claude command: %s", strings.Join(append([]string{l.cliPath}, args...), " "))
+
 	return exec.CommandContext(ctx, l.cliPath, args...)
 }
 
@@ -225,10 +242,22 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 		}
 		var payload map[string]any
 		if err := json.Unmarshal([]byte(line), &payload); err != nil {
-			return builder.String(), generationInfo, fmt.Errorf("claudecode: parse json: %w", err)
+			return builder.String(), generationInfo, fmt.Errorf("claude code: parse json: %w", err)
 		}
 
 		msgType, _ := payload["type"].(string)
+
+		// 记录每行完整 stream-json，包含 msgType，便于排查输出内容。
+		logType := msgType
+		if logType == "" {
+			logType = "<empty>"
+		}
+		if pretty, err := json.MarshalIndent(payload, "", "  "); err == nil {
+			log.Printf("\nclaude code: stream-json (msgType=%s):\n%s\n", logType, string(pretty))
+		} else {
+			log.Printf("\nclaude code: stream-json (msgType=%s): %s\n", logType, line)
+		}
+
 		switch msgType {
 		case "assistant":
 			texts, err := extractAssistantTexts(payload)
@@ -245,14 +274,14 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 			}
 		case "result":
 			generationInfo = mergeResultInfo(generationInfo, payload)
-		case "error":
-			return builder.String(), generationInfo, fmt.Errorf("claudecode: cli error: %v", payload)
+		case "":
+			return builder.String(), generationInfo, fmt.Errorf("claude code: cli error: %v", payload)
 		default:
 			// Ignore other message types (system, stream_event, etc.).
 		}
 	}
 	if err := scanner.Err(); err != nil {
-		return builder.String(), generationInfo, fmt.Errorf("claudecode: read stdout: %w", err)
+		return builder.String(), generationInfo, fmt.Errorf("claude code: read stdout: %w", err)
 	}
 
 	return builder.String(), generationInfo, nil
@@ -358,7 +387,7 @@ func messageToText(msg llms.MessageContent) (string, error) {
 			}
 			builder.WriteString(fmt.Sprintf("[ToolResult:%s] %s", name, p.Content))
 		default:
-			return "", fmt.Errorf("claudecode: unsupported content part: %T", part)
+			return "", fmt.Errorf("claude code: unsupported content part: %T", part)
 		}
 	}
 
@@ -393,12 +422,12 @@ func rolePrefix(role llms.ChatMessageType) string {
 func extractAssistantTexts(payload map[string]any) ([]string, error) {
 	message, ok := payload["message"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("claudecode: assistant message missing 'message'")
+		return nil, fmt.Errorf("claude code: assistant message missing 'message'")
 	}
 
 	content, ok := message["content"]
 	if !ok {
-		return nil, fmt.Errorf("claudecode: assistant message missing 'content'")
+		return nil, fmt.Errorf("claude code: assistant message missing 'content'")
 	}
 
 	switch blocks := content.(type) {
@@ -425,7 +454,7 @@ func extractAssistantTexts(payload map[string]any) ([]string, error) {
 		}
 		return []string{blocks}, nil
 	default:
-		return nil, fmt.Errorf("claudecode: unsupported assistant content type: %T", content)
+		return nil, fmt.Errorf("claude code: unsupported assistant content type: %T", content)
 	}
 }
 
