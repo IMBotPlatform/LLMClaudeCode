@@ -566,8 +566,8 @@ func (l *LLM) handleToolEvent(event ToolEvent, builder *strings.Builder, streami
 			inputJSON, _ := json.MarshalIndent(event.Input, "", "  ")
 			summary = fmt.Sprintf("\n🔧 [%s] %s\n%s\n", event.ToolName, event.ToolID, string(inputJSON))
 		} else {
-			// Verbose 模式：仅输出工具名称
-			summary = fmt.Sprintf("\n🔧 %s\n", event.ToolName)
+			// Verbose 模式：输出工具名称 + 关键参数摘要
+			summary = formatToolUseSummary(event.ToolName, event.Input)
 		}
 	case ToolEventResult:
 		if l.opts.OutputMode == OutputModeFull {
@@ -576,14 +576,9 @@ func (l *LLM) handleToolEvent(event ToolEvent, builder *strings.Builder, streami
 			if len(output) > 500 {
 				output = output[:500] + "... (truncated)"
 			}
-			summary = fmt.Sprintf("📤 %s\n", output)
-		} else {
-			// Verbose 模式：仅输出简短摘要
-			outputLen := len(event.Output)
-			if outputLen > 0 {
-				summary = fmt.Sprintf("📤 (%d bytes)\n", outputLen)
-			}
+			summary = fmt.Sprintf("  └─ 📤 %s\n", output)
 		}
+		// Verbose 模式不输出 result（避免太冗长）
 	}
 
 	if summary != "" {
@@ -592,4 +587,71 @@ func (l *LLM) handleToolEvent(event ToolEvent, builder *strings.Builder, streami
 			_ = streamingFunc(ctx, []byte(summary))
 		}
 	}
+}
+
+// formatToolUseSummary 为 Verbose 模式格式化工具调用摘要。
+// 参数：toolName 为工具名称，input 为输入参数。
+// 返回：格式化的摘要字符串。
+func formatToolUseSummary(toolName string, input map[string]any) string {
+	// 根据工具类型提取关键参数
+	var detail string
+	switch toolName {
+	case "Read", "read_file", "view_file":
+		if path, ok := input["file_path"].(string); ok {
+			detail = path
+		} else if path, ok := input["path"].(string); ok {
+			detail = path
+		}
+	case "Write", "write_file", "create_file":
+		if path, ok := input["file_path"].(string); ok {
+			detail = path
+		} else if path, ok := input["path"].(string); ok {
+			detail = path
+		}
+	case "Bash", "run_command", "execute_command":
+		if cmd, ok := input["command"].(string); ok {
+			// 截断过长的命令
+			if len(cmd) > 80 {
+				detail = cmd[:77] + "..."
+			} else {
+				detail = cmd
+			}
+		}
+	case "TodoWrite", "task", "plan":
+		if todos, ok := input["todos"].(string); ok {
+			lines := strings.Split(todos, "\n")
+			if len(lines) > 0 {
+				detail = fmt.Sprintf("%d items", len(lines))
+			}
+		}
+	case "Skill", "use_skill":
+		if name, ok := input["skill_name"].(string); ok {
+			detail = name
+		} else if name, ok := input["name"].(string); ok {
+			detail = name
+		}
+	case "Search", "grep", "find":
+		if query, ok := input["query"].(string); ok {
+			detail = query
+		} else if pattern, ok := input["pattern"].(string); ok {
+			detail = pattern
+		}
+	default:
+		// 尝试提取常见字段
+		for _, key := range []string{"path", "file", "command", "query", "name", "url"} {
+			if v, ok := input[key].(string); ok && v != "" {
+				if len(v) > 60 {
+					detail = v[:57] + "..."
+				} else {
+					detail = v
+				}
+				break
+			}
+		}
+	}
+
+	if detail != "" {
+		return fmt.Sprintf("🔧 %s: %s\n", toolName, detail)
+	}
+	return fmt.Sprintf("🔧 %s\n", toolName)
 }
