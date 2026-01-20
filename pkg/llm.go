@@ -651,7 +651,7 @@ func formatToolUseSummary(toolName string, input map[string]any) string {
 	}
 
 	if detail != "" {
-		return fmt.Sprintf("🔧 %s: %s\n", toolName, detail)
+		return fmt.Sprintf("\n🔧 %s: %s\n", toolName, detail)
 	}
-	return fmt.Sprintf("🔧 %s\n", toolName)
+	return fmt.Sprintf("\n🔧 %s\n", toolName)
 }
