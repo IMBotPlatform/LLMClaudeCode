@@ -1,5 +1,68 @@
 package claudecode
 
+import "time"
+
+// OutputMode 控制输出内容的详细程度。
+type OutputMode int
+
+const (
+	// OutputModeText 仅输出最终文本 (默认行为)。
+	OutputModeText OutputMode = iota
+	// OutputModeVerbose 输出文本 + 工具调用摘要。
+	OutputModeVerbose
+	// OutputModeFull 输出完整的 Agent 执行轨迹。
+	OutputModeFull
+)
+
+// String 返回 OutputMode 的字符串表示。
+func (m OutputMode) String() string {
+	switch m {
+	case OutputModeText:
+		return "text"
+	case OutputModeVerbose:
+		return "verbose"
+	case OutputModeFull:
+		return "full"
+	default:
+		return "unknown"
+	}
+}
+
+// ToolEventType 工具事件类型。
+type ToolEventType int
+
+const (
+	// ToolEventUse 工具调用请求。
+	ToolEventUse ToolEventType = iota
+	// ToolEventResult 工具执行结果。
+	ToolEventResult
+)
+
+// String 返回 ToolEventType 的字符串表示。
+func (t ToolEventType) String() string {
+	switch t {
+	case ToolEventUse:
+		return "tool_use"
+	case ToolEventResult:
+		return "tool_result"
+	default:
+		return "unknown"
+	}
+}
+
+// ToolEvent 工具调用事件。
+type ToolEvent struct {
+	Type      ToolEventType  // 事件类型
+	ToolName  string         // 工具名称, e.g. "read_file", "run_command"
+	ToolID    string         // 工具调用 ID
+	Input     map[string]any // tool_use 时的输入参数
+	Output    string         // tool_result 时的输出内容
+	Timestamp time.Time      // 事件时间戳
+}
+
+// ToolEventHook 工具事件回调函数类型。
+type ToolEventHook func(event ToolEvent)
+
 // Options defines the configuration for Claude Code CLI integration.
 type Options struct {
 	// CLIPath is the explicit path to the Claude Code CLI binary.
@@ -24,6 +87,10 @@ type Options struct {
 	ExtraArgs map[string]string
 	// MaxBufferSize sets the maximum stdout line size for stream-json parsing.
 	MaxBufferSize int
+	// OutputMode 控制输出内容的详细程度。
+	OutputMode OutputMode
+	// ToolEventHook 工具事件回调，当 Agent 调用工具时触发。
+	ToolEventHook ToolEventHook
 }
 
 // Option mutates Options.
@@ -125,5 +192,21 @@ func WithMaxBufferSize(size int) Option {
 		if size > 0 {
 			o.MaxBufferSize = size
 		}
+	}
+}
+
+// WithOutputMode sets the output detail level.
+// 参数：mode 为 OutputMode 枚举值。
+func WithOutputMode(mode OutputMode) Option {
+	return func(o *Options) {
+		o.OutputMode = mode
+	}
+}
+
+// WithToolEventHook sets the tool event callback hook.
+// 参数：hook 为工具事件回调函数，当 Agent 调用工具时触发。
+func WithToolEventHook(hook ToolEventHook) Option {
+	return func(o *Options) {
+		o.ToolEventHook = hook
 	}
 }

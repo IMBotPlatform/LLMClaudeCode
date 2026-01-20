@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/tmc/langchaingo/llms"
 )
@@ -260,10 +261,12 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 
 		switch msgType {
 		case "assistant":
-			texts, err := extractAssistantTexts(payload)
+			// 处理 assistant 消息中的 text 和 tool_use 块
+			texts, toolUses, err := extractAssistantContent(payload)
 			if err != nil {
 				return builder.String(), generationInfo, err
 			}
+			// 处理文本块
 			for _, text := range texts {
 				if streamingFunc != nil {
 					if err := streamingFunc(ctx, []byte(text)); err != nil {
@@ -272,6 +275,24 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 				}
 				builder.WriteString(text)
 			}
+			// 处理工具调用块
+			for _, tu := range toolUses {
+				l.handleToolEvent(ToolEvent{
+					Type:      ToolEventUse,
+					ToolName:  tu.Name,
+					ToolID:    tu.ID,
+					Input:     tu.Input,
+					Timestamp: time.Now(),
+				}, &builder, streamingFunc, ctx)
+			}
+		case "tool_result":
+			// 处理工具执行结果消息
+			l.handleToolEvent(ToolEvent{
+				Type:      ToolEventResult,
+				ToolID:    getStringField(payload, "tool_use_id"),
+				Output:    getStringField(payload, "content"),
+				Timestamp: time.Now(),
+			}, &builder, streamingFunc, ctx)
 		case "result":
 			generationInfo = mergeResultInfo(generationInfo, payload)
 		case "":
@@ -416,45 +437,62 @@ func rolePrefix(role llms.ChatMessageType) string {
 	}
 }
 
-// extractAssistantTexts extracts text blocks from assistant messages.
+// toolUseInfo 工具调用信息。
+type toolUseInfo struct {
+	ID    string
+	Name  string
+	Input map[string]any
+}
+
+// extractAssistantContent extracts text blocks and tool_use blocks from assistant messages.
 // 参数：payload 为 CLI JSON 行。
-// 返回：文本块与错误。
-func extractAssistantTexts(payload map[string]any) ([]string, error) {
+// 返回：文本块、工具调用信息与错误。
+func extractAssistantContent(payload map[string]any) ([]string, []toolUseInfo, error) {
 	message, ok := payload["message"].(map[string]any)
 	if !ok {
-		return nil, fmt.Errorf("claude code: assistant message missing 'message'")
+		return nil, nil, fmt.Errorf("claude code: assistant message missing 'message'")
 	}
 
 	content, ok := message["content"]
 	if !ok {
-		return nil, fmt.Errorf("claude code: assistant message missing 'content'")
+		return nil, nil, fmt.Errorf("claude code: assistant message missing 'content'")
 	}
 
 	switch blocks := content.(type) {
 	case []any:
-		texts := make([]string, 0, len(blocks))
+		var texts []string
+		var toolUses []toolUseInfo
 		for _, block := range blocks {
 			blockMap, ok := block.(map[string]any)
 			if !ok {
 				continue
 			}
 			blockType, _ := blockMap["type"].(string)
-			if blockType != "text" {
-				continue
-			}
-			text, _ := blockMap["text"].(string)
-			if text != "" {
-				texts = append(texts, text)
+			switch blockType {
+			case "text":
+				text, _ := blockMap["text"].(string)
+				if text != "" {
+					texts = append(texts, text)
+				}
+			case "tool_use":
+				tu := toolUseInfo{
+					ID:   getStringField(blockMap, "id"),
+					Name: getStringField(blockMap, "name"),
+				}
+				if input, ok := blockMap["input"].(map[string]any); ok {
+					tu.Input = input
+				}
+				toolUses = append(toolUses, tu)
 			}
 		}
-		return texts, nil
+		return texts, toolUses, nil
 	case string:
 		if blocks == "" {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return []string{blocks}, nil
+		return []string{blocks}, nil, nil
 	default:
-		return nil, fmt.Errorf("claude code: unsupported assistant content type: %T", content)
+		return nil, nil, fmt.Errorf("claude code: unsupported assistant content type: %T", content)
 	}
 }
 
@@ -495,4 +533,63 @@ func mergeEnv(base []string, overrides map[string]string) []string {
 		merged = append(merged, fmt.Sprintf("%s=%s", k, v))
 	}
 	return merged
+}
+
+// getStringField safely extracts a string field from a map.
+// 参数：m 为 map，key 为字段名。
+// 返回：字段值，如果不存在或类型不匹配则返回空字符串。
+func getStringField(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// handleToolEvent processes tool events based on OutputMode settings.
+// 参数：event 为工具事件，builder 为输出构建器，streamingFunc 为流式回调，ctx 为上下文。
+func (l *LLM) handleToolEvent(event ToolEvent, builder *strings.Builder, streamingFunc func(context.Context, []byte) error, ctx context.Context) {
+	// 始终触发回调（如果已设置）
+	if l.opts.ToolEventHook != nil {
+		l.opts.ToolEventHook(event)
+	}
+
+	// 根据 OutputMode 决定是否追加到输出
+	if l.opts.OutputMode == OutputModeText {
+		return // 默认模式不输出工具信息
+	}
+
+	var summary string
+	switch event.Type {
+	case ToolEventUse:
+		if l.opts.OutputMode == OutputModeFull {
+			// 完整模式：输出工具名称和输入参数
+			inputJSON, _ := json.MarshalIndent(event.Input, "", "  ")
+			summary = fmt.Sprintf("\n🔧 [%s] %s\n%s\n", event.ToolName, event.ToolID, string(inputJSON))
+		} else {
+			// Verbose 模式：仅输出工具名称
+			summary = fmt.Sprintf("\n🔧 %s\n", event.ToolName)
+		}
+	case ToolEventResult:
+		if l.opts.OutputMode == OutputModeFull {
+			// 完整模式：输出完整结果
+			output := event.Output
+			if len(output) > 500 {
+				output = output[:500] + "... (truncated)"
+			}
+			summary = fmt.Sprintf("📤 %s\n", output)
+		} else {
+			// Verbose 模式：仅输出简短摘要
+			outputLen := len(event.Output)
+			if outputLen > 0 {
+				summary = fmt.Sprintf("📤 (%d bytes)\n", outputLen)
+			}
+		}
+	}
+
+	if summary != "" {
+		builder.WriteString(summary)
+		if streamingFunc != nil {
+			_ = streamingFunc(ctx, []byte(summary))
+		}
+	}
 }
