@@ -91,6 +91,16 @@ type Options struct {
 	OutputMode OutputMode
 	// ToolEventHook 工具事件回调，当 Agent 调用工具时触发。
 	ToolEventHook ToolEventHook
+
+	// SessionID 指定会话 ID（UUID 格式），用于恢复/继续特定会话。
+	// 当设置时，Claude CLI 将加载并继续该会话的对话历史。
+	SessionID string
+	// Resume 是否恢复会话。若 SessionID 非空则自动恢复该会话。
+	Resume bool
+	// ForkSession 恢复时是否创建新 session ID（与 Resume 配合使用）。
+	ForkSession bool
+	// NoSessionPersistence 禁用 session 持久化（仅 --print 模式有效）。
+	NoSessionPersistence bool
 }
 
 // Option mutates Options.
@@ -208,5 +218,41 @@ func WithOutputMode(mode OutputMode) Option {
 func WithToolEventHook(hook ToolEventHook) Option {
 	return func(o *Options) {
 		o.ToolEventHook = hook
+	}
+}
+
+// WithSessionID sets the session ID for conversation continuity.
+// 参数：sessionID 为 UUID 格式的会话 ID。
+// 设置后 Claude CLI 将加载并继续该会话的对话历史。
+func WithSessionID(sessionID string) Option {
+	return func(o *Options) {
+		o.SessionID = sessionID
+	}
+}
+
+// WithResume enables session resumption.
+// 参数：resume 为是否启用会话恢复。
+// 若 SessionID 非空，则恢复该会话；否则恢复最近的会话。
+func WithResume(resume bool) Option {
+	return func(o *Options) {
+		o.Resume = resume
+	}
+}
+
+// WithForkSession creates a new session ID when resuming.
+// 参数：fork 为是否在恢复时创建新分支。
+// 需与 Resume 配合使用。
+func WithForkSession(fork bool) Option {
+	return func(o *Options) {
+		o.ForkSession = fork
+	}
+}
+
+// WithNoSessionPersistence disables session persistence.
+// 参数：disabled 为是否禁用会话持久化。
+// 仅在 --print 模式下有效。
+func WithNoSessionPersistence(disabled bool) Option {
+	return func(o *Options) {
+		o.NoSessionPersistence = disabled
 	}
 }

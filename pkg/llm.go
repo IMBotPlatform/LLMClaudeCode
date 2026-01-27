@@ -180,6 +180,24 @@ func (l *LLM) GenerateContent(ctx context.Context, messages []llms.MessageConten
 func (l *LLM) buildCommand(ctx context.Context, prompt string, systemPrompt string) *exec.Cmd {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 
+	// Session management
+	if l.opts.SessionID != "" {
+		args = append(args, "--session-id", l.opts.SessionID)
+	}
+	if l.opts.Resume {
+		if l.opts.SessionID != "" {
+			args = append(args, "--resume", l.opts.SessionID)
+		} else {
+			args = append(args, "--resume")
+		}
+	}
+	if l.opts.ForkSession {
+		args = append(args, "--fork-session")
+	}
+	if l.opts.NoSessionPersistence {
+		args = append(args, "--no-session-persistence")
+	}
+
 	if systemPrompt != "" {
 		args = append(args, "--system-prompt", systemPrompt)
 	}
