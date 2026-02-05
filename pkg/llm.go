@@ -180,20 +180,22 @@ func (l *LLM) GenerateContent(ctx context.Context, messages []llms.MessageConten
 func (l *LLM) buildCommand(ctx context.Context, prompt string, systemPrompt string) *exec.Cmd {
 	args := []string{"--output-format", "stream-json", "--verbose"}
 
-	// Session management
-	if l.opts.SessionID != "" {
-		args = append(args, "--session-id", l.opts.SessionID)
-	}
+	// Session management - 互斥处理：--resume 和 --session-id 不能同时使用
 	if l.opts.Resume {
+		// 恢复会话：只用 --resume <id>
 		if l.opts.SessionID != "" {
 			args = append(args, "--resume", l.opts.SessionID)
 		} else {
 			args = append(args, "--resume")
 		}
+	} else if l.opts.SessionID != "" {
+		// 新会话：只用 --session-id <id>
+		args = append(args, "--session-id", l.opts.SessionID)
 	}
 	if l.opts.ForkSession {
 		args = append(args, "--fork-session")
 	}
+
 	if l.opts.NoSessionPersistence {
 		args = append(args, "--no-session-persistence")
 	}
