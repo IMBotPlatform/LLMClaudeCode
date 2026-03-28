@@ -1,0 +1,15 @@
+validate_commands:
+  - go test ./...
+
+change_type_to_checks:
+  option_semantics:
+    - go test ./...
+  session_logic:
+    - go test ./...
+  cli_integration:
+    - go test ./...
+
+ci_jobs: []
+
+release_checks:
+  - verify wechataibot llm loader if options or session logic changed

@@ -1,0 +1,19 @@
+public_routes:
+  - package: pkg
+
+events:
+  - ToolEvent
+
+schemas:
+  - Options
+  - OutputMode
+  - ToolEventType
+  - ToolEvent
+
+sdk_facades:
+  - LLM
+
+generated_mirrors: []
+
+downstream_consumers:
+  - wechataibot

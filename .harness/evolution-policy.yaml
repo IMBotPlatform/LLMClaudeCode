@@ -1,0 +1,28 @@
+repo_id: LLMClaudeCode
+signals:
+  structure:
+    targets:
+      - .harness/generated/module-map.md
+      - .harness/generated/repo-manifest.yaml
+  runtime:
+    targets:
+      - .harness/architecture.md
+      - .harness/generated/dependency-summary.md
+  contract:
+    targets:
+      - .harness/generated/api-index.md
+      - .harness/generated/contract-index.yaml
+      - .harness/domains/claude-cli-adapter.md
+  boundary:
+    targets:
+      - AGENTS.md
+      - .harness/conventions.md
+
+workspace_escalation:
+  - changed option semantics consumed by wechataibot
+  - changed default CLI or session behavior used across repos
+
+update_policy:
+  class_a: direct
+  class_b: incremental
+  class_c: candidate_only

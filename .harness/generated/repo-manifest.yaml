@@ -1,0 +1,25 @@
+repo_id: LLMClaudeCode
+role: Claude Code CLI adapter for llms.Model
+owns:
+  - cli path discovery
+  - command argument construction
+  - stream-json output parsing
+  - session-related option mapping
+not_owns:
+  - WeCom protocol
+  - command routing
+  - deployment workflow
+entrypoints:
+  - pkg/llm.go
+  - pkg/options.go
+depends_on:
+  - github.com/tmc/langchaingo
+  - local claude CLI binary
+high_risk_areas:
+  - pkg/llm.go
+  - pkg/options.go
+read_first:
+  - README.md
+  - .harness/generated/api-index.md
+  - .harness/architecture.md
+base_branch: main
