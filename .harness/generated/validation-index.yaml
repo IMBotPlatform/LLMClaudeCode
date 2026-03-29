@@ -1,15 +1,24 @@
 validate_commands:
   - go test ./...
+  - go test ./pkg -run 'Test(ShouldInsertAssistantParagraphBreak|ExtractAssistantContentIncludesThinkingBlocks|ReadStreamThinkingTags.*)'
+  - ANTHROPIC_AUTH_TOKEN=<token> go test -v -run 'TestLLM(GLM|DeepSeek)' -count=1 ./pkg
 
 change_type_to_checks:
   option_semantics:
     - go test ./...
+    - go test ./pkg -run 'TestReadStreamThinkingTags.*'
   session_logic:
     - go test ./...
+  thinking_output:
+    - go test ./pkg -run 'TestReadStreamThinkingTags.*'
+  stream_parsing:
+    - go test ./pkg -run 'Test(ShouldInsertAssistantParagraphBreak|ExtractAssistantContentIncludesThinkingBlocks|ReadStreamThinkingTags.*)'
   cli_integration:
-    - go test ./...
+    - ANTHROPIC_AUTH_TOKEN=<token> go test -v -run 'TestLLM(GLM|DeepSeek)' -count=1 ./pkg
 
 ci_jobs: []
 
 release_checks:
-  - verify wechataibot llm loader if options or session logic changed
+  - when: pkg/options.go or pkg/llm.go changes
+    check: verify wechataibot/internal/app/llm_loader.go and llm_runtime.go if options or session logic changed
+  - verify downstream rendering if thinking or tool summary output changed

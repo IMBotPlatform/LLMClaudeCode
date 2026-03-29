@@ -4,6 +4,8 @@ owns:
   - cli path discovery
   - command argument construction
   - stream-json output parsing
+  - thinking block rendering policy
+  - tool event summary formatting
   - session-related option mapping
 not_owns:
   - WeCom protocol
@@ -19,7 +21,12 @@ high_risk_areas:
   - pkg/llm.go
   - pkg/options.go
 read_first:
+  - AGENTS.md
   - README.md
+  - .harness/README.md
+  - .harness/generated/module-map.md
+  - .harness/generated/contract-index.yaml
+  - .harness/generated/validation-index.yaml
   - .harness/generated/api-index.md
   - .harness/architecture.md
 base_branch: main

@@ -10,9 +10,13 @@
 ## Start Here
 
 1. `.harness/README.md`
-2. `.harness/generated/repo-manifest.yaml`
-3. `.harness/generated/api-index.md`
-4. `README.md`
+2. `.harness/generated/module-map.md`
+3. `.harness/generated/repo-manifest.yaml`
+4. `.harness/generated/contract-index.yaml`
+5. `.harness/generated/validation-index.yaml`
+6. `.harness/evolution-policy.yaml`
+7. `.harness/generated/api-index.md`
+8. `README.md`
 
 ## Source of Truth
 

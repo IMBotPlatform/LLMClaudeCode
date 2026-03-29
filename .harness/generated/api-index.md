@@ -14,6 +14,11 @@
 - `ToolEvent`
 - `ToolEventHook`
 
+## Notable Exported Methods
+
+- `Call`
+- `GenerateContent`
+
 ## Notable Exported Constructors / Helpers
 
 - `New`
@@ -30,6 +35,7 @@
 - `WithMaxBufferSize`
 - `WithOutputMode`
 - `WithToolEventHook`
+- `WithThinkingTags`
 - `WithSessionID`
 - `WithResume`
 - `WithForkSession`

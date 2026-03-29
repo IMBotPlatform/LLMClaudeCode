@@ -11,7 +11,11 @@
 ## Reading Order
 
 1. `generated/repo-manifest.yaml`
-2. `generated/api-index.md`
-3. `architecture.md`
-4. `domains/claude-cli-adapter.md`
-5. `runbooks/local-validation.md`
+2. `generated/module-map.md`
+3. `generated/contract-index.yaml`
+4. `generated/validation-index.yaml`
+5. `evolution-policy.yaml`
+6. `generated/api-index.md`
+7. `architecture.md`
+8. `domains/claude-cli-adapter.md`
+9. `runbooks/local-validation.md`

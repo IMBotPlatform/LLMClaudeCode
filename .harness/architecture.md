@@ -9,8 +9,9 @@
 Observed fact:
 
 - 仓库只有一个主公开包：`pkg`
-- `llm.go` 负责 CLI 调用和流式解析
-- `options.go` 负责 Option 与 session 相关配置
+- `llm.go` 负责 prompt 组装、CLI 调用、`stream-json` 解析、thinking/tool 事件格式化
+- `options.go` 负责 Option、输出模式、thinking tag、session 相关配置
+- `llm_test.go` 负责无外部依赖的流式解析与 thinking tag 单元测试
 
 ## Major Modules
 
@@ -19,11 +20,16 @@ Observed fact:
   - `New`
   - `GenerateContent`
   - CLI 进程创建、stdout/stderr 管理、stream-json 读取
+  - thinking block 渲染、tool_use / tool_result 摘要输出
 - `pkg/options.go`
   - `Options`
   - `Option`
   - `With*` 系列配置器
-  - `OutputMode`、`ToolEvent`、session 配置
+  - `OutputMode`、`ToolEvent`、`ThinkingTags`、session 配置
+- `pkg/llm_test.go`
+  - `shouldInsertAssistantParagraphBreak`
+  - `extractAssistantContent`
+  - thinking tag 输出语义
 
 ## Dependency Directions
 
@@ -38,18 +44,23 @@ New(opts...)
   -> merge options and env
   -> build command args
   -> run claude --output-format stream-json
-  -> parse chunks into llms.ContentResponse
+  -> parse assistant text / thinking / tool_use blocks
+  -> optionally emit tool summaries and <think> blocks
+  -> fold result payload into llms.ContentResponse
 ```
 
 ## High-Risk Areas
 
 - CLI 参数拼装顺序
 - stdout/stderr 读取与进程生命周期
+- thinking block 与正文之间的拼接边界
+- OutputMode 下的工具事件可见性
 - `SessionID` / `Resume` / `ForkSession` 的互斥逻辑
 
 ## Evidence
 
 - `pkg/llm.go`
 - `pkg/options.go`
+- `pkg/llm_test.go`
 - `pkg/llm_glm_test.go`
 - `pkg/llm_ds_test.go`

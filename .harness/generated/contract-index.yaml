@@ -1,19 +1,51 @@
-public_routes:
-  - package: pkg
+public_routes: []
 
 events:
-  - ToolEvent
+  - name: ToolEventUse
+    path: pkg/options.go
+  - name: ToolEventResult
+    path: pkg/options.go
+
+enums:
+  - name: OutputMode
+    owner: pkg/options.go
+  - name: ToolEventType
+    owner: pkg/options.go
 
 schemas:
-  - Options
-  - OutputMode
-  - ToolEventType
-  - ToolEvent
+  - name: Options
+    path: pkg/options.go
+  - name: OutputMode
+    path: pkg/options.go
+  - name: ToolEventType
+    path: pkg/options.go
+  - name: ToolEvent
+    path: pkg/options.go
+  - name: ToolEventHook
+    path: pkg/options.go
 
 sdk_facades:
-  - LLM
+  - symbol: New
+    path: pkg/llm.go
+  - symbol: (*LLM).GenerateContent
+    path: pkg/llm.go
+  - symbol: WithPermissionMode
+    path: pkg/options.go
+  - symbol: WithSessionID
+    path: pkg/options.go
+  - symbol: WithResume
+    path: pkg/options.go
+  - symbol: WithForkSession
+    path: pkg/options.go
+  - symbol: WithNoSessionPersistence
+    path: pkg/options.go
+  - symbol: WithToolEventHook
+    path: pkg/options.go
 
 generated_mirrors: []
 
 downstream_consumers:
-  - wechataibot
+  - consumer: wechataibot
+    path: ../wechataibot/internal/app/llm_runtime.go
+  - consumer: wechataibot
+    path: ../wechataibot/internal/app/llm_loader.go

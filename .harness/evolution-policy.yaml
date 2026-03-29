@@ -8,11 +8,14 @@ signals:
     targets:
       - .harness/architecture.md
       - .harness/generated/dependency-summary.md
+      - .harness/generated/validation-index.yaml
+      - .harness/runbooks/local-validation.md
   contract:
     targets:
       - .harness/generated/api-index.md
       - .harness/generated/contract-index.yaml
       - .harness/domains/claude-cli-adapter.md
+      - .harness/glossary.md
   boundary:
     targets:
       - AGENTS.md
@@ -21,6 +24,7 @@ signals:
 workspace_escalation:
   - changed option semantics consumed by wechataibot
   - changed default CLI or session behavior used across repos
+  - changed thinking tag or tool summary output observed by downstream repos
 
 update_policy:
   class_a: direct
