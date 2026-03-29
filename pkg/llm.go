@@ -255,6 +255,8 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 
 	var builder strings.Builder
 	var generationInfo map[string]any
+	var pendingThinking []string
+	emittedVisibleText := false
 
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
@@ -290,7 +292,12 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 				switch block.Kind {
 				case assistantContentText:
 					chunk := block.Text
-					if shouldInsertAssistantParagraphBreak(builder.String(), block.Text) {
+					if !emittedVisibleText && l.opts.ThinkingTags {
+						if thinkChunk := formatThinkingBlock(joinThinkingBlocks(pendingThinking)); thinkChunk != "" {
+							chunk = thinkChunk + "\n\n" + block.Text
+							pendingThinking = nil
+						}
+					} else if shouldInsertAssistantParagraphBreak(builder.String(), block.Text) {
 						chunk = "\n\n" + block.Text
 					}
 					if streamingFunc != nil {
@@ -299,20 +306,15 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 						}
 					}
 					builder.WriteString(chunk)
+					emittedVisibleText = emittedVisibleText || strings.TrimSpace(block.Text) != ""
 				case assistantContentThinking:
 					if !l.opts.ThinkingTags {
 						continue
 					}
-					chunk := formatThinkingBlock(block.Text)
-					if shouldInsertAssistantParagraphBreak(builder.String(), chunk) {
-						chunk = "\n\n" + chunk
+					if emittedVisibleText {
+						continue
 					}
-					if streamingFunc != nil {
-						if err := streamingFunc(ctx, []byte(chunk)); err != nil {
-							return builder.String(), generationInfo, err
-						}
-					}
-					builder.WriteString(chunk)
+					pendingThinking = append(pendingThinking, block.Text)
 				case assistantContentToolUse:
 					tu := block.ToolUse
 					l.handleToolEvent(ToolEvent{
@@ -586,6 +588,19 @@ func formatThinkingBlock(text string) string {
 		return ""
 	}
 	return "<think>" + text + "</think>"
+}
+
+// joinThinkingBlocks 将多个 thinking block 聚合成一个思考段落。
+func joinThinkingBlocks(blocks []string) string {
+	parts := make([]string, 0, len(blocks))
+	for _, block := range blocks {
+		block = strings.TrimSpace(block)
+		if block == "" {
+			continue
+		}
+		parts = append(parts, block)
+	}
+	return strings.Join(parts, "\n\n")
 }
 
 // mergeResultInfo extracts useful fields from result messages.

@@ -110,3 +110,48 @@ func TestReadStreamThinkingTagsEnabled(t *testing.T) {
 		t.Fatalf("unexpected output: got %q want %q", got, want)
 	}
 }
+
+func TestReadStreamThinkingTagsAggregateBeforeFirstVisibleText(t *testing.T) {
+	llm := &LLM{
+		opts: Options{
+			ThinkingTags: true,
+		},
+	}
+	stdout := strings.NewReader(
+		`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"第一段思考"}]}}` + "\n" +
+			`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"第二段思考"},{"type":"text","text":"最终答案"}]}}` + "\n",
+	)
+
+	got, _, err := llm.readStream(context.Background(), stdout, nil)
+	if err != nil {
+		t.Fatalf("readStream: %v", err)
+	}
+	want := "<think>第一段思考\n\n第二段思考</think>\n\n最终答案"
+	if got != want {
+		t.Fatalf("unexpected output: got %q want %q", got, want)
+	}
+}
+
+func TestReadStreamThinkingTagsSuppressAfterVisibleText(t *testing.T) {
+	llm := &LLM{
+		opts: Options{
+			ThinkingTags: true,
+		},
+	}
+	stdout := strings.NewReader(
+		`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"先分析"},{"type":"text","text":"第一段正文"}]}}` + "\n" +
+			`{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"后续思考"},{"type":"text","text":"第二段正文"}]}}` + "\n",
+	)
+
+	got, _, err := llm.readStream(context.Background(), stdout, nil)
+	if err != nil {
+		t.Fatalf("readStream: %v", err)
+	}
+	want := "<think>先分析</think>\n\n第一段正文\n\n第二段正文"
+	if got != want {
+		t.Fatalf("unexpected output: got %q want %q", got, want)
+	}
+	if strings.Contains(got, "后续思考") {
+		t.Fatalf("thinking after visible text should be suppressed, got %q", got)
+	}
+}
