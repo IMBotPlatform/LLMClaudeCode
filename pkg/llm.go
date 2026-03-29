@@ -288,12 +288,16 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 			}
 			// 处理文本块
 			for _, text := range texts {
+				chunk := text
+				if shouldInsertAssistantParagraphBreak(builder.String(), text) {
+					chunk = "\n\n" + text
+				}
 				if streamingFunc != nil {
-					if err := streamingFunc(ctx, []byte(text)); err != nil {
+					if err := streamingFunc(ctx, []byte(chunk)); err != nil {
 						return builder.String(), generationInfo, err
 					}
 				}
-				builder.WriteString(text)
+				builder.WriteString(chunk)
 			}
 			// 处理工具调用块
 			for _, tu := range toolUses {
@@ -326,6 +330,20 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 	}
 
 	return builder.String(), generationInfo, nil
+}
+
+// shouldInsertAssistantParagraphBreak 判断新的 assistant 文本块前是否需要补段落分隔。
+func shouldInsertAssistantParagraphBreak(existing, next string) bool {
+	if strings.TrimSpace(existing) == "" || strings.TrimSpace(next) == "" {
+		return false
+	}
+	if strings.HasPrefix(next, "\n") {
+		return false
+	}
+	if strings.HasSuffix(existing, "\n") {
+		return false
+	}
+	return true
 }
 
 // splitSystemMessages extracts system messages and returns remaining messages.
