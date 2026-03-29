@@ -91,6 +91,8 @@ type Options struct {
 	OutputMode OutputMode
 	// ToolEventHook 工具事件回调，当 Agent 调用工具时触发。
 	ToolEventHook ToolEventHook
+	// ThinkingTags 控制是否将 Claude 的 thinking block 渲染为 <think>...</think> 文本。
+	ThinkingTags bool
 
 	// SessionID 指定会话 ID（UUID 格式），用于恢复/继续特定会话。
 	// 当设置时，Claude CLI 将加载并继续该会话的对话历史。
@@ -218,6 +220,13 @@ func WithOutputMode(mode OutputMode) Option {
 func WithToolEventHook(hook ToolEventHook) Option {
 	return func(o *Options) {
 		o.ToolEventHook = hook
+	}
+}
+
+// WithThinkingTags controls whether thinking blocks are rendered as <think> tags.
+func WithThinkingTags(enabled bool) Option {
+	return func(o *Options) {
+		o.ThinkingTags = enabled
 	}
 }
 

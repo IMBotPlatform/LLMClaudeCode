@@ -281,33 +281,48 @@ func (l *LLM) readStream(ctx context.Context, stdout io.Reader, streamingFunc fu
 
 		switch msgType {
 		case "assistant":
-			// 处理 assistant 消息中的 text 和 tool_use 块
-			texts, toolUses, err := extractAssistantContent(payload)
+			// 处理 assistant 消息中的有序内容块（text / thinking / tool_use）
+			blocks, err := extractAssistantContent(payload)
 			if err != nil {
 				return builder.String(), generationInfo, err
 			}
-			// 处理文本块
-			for _, text := range texts {
-				chunk := text
-				if shouldInsertAssistantParagraphBreak(builder.String(), text) {
-					chunk = "\n\n" + text
-				}
-				if streamingFunc != nil {
-					if err := streamingFunc(ctx, []byte(chunk)); err != nil {
-						return builder.String(), generationInfo, err
+			for _, block := range blocks {
+				switch block.Kind {
+				case assistantContentText:
+					chunk := block.Text
+					if shouldInsertAssistantParagraphBreak(builder.String(), block.Text) {
+						chunk = "\n\n" + block.Text
 					}
+					if streamingFunc != nil {
+						if err := streamingFunc(ctx, []byte(chunk)); err != nil {
+							return builder.String(), generationInfo, err
+						}
+					}
+					builder.WriteString(chunk)
+				case assistantContentThinking:
+					if !l.opts.ThinkingTags {
+						continue
+					}
+					chunk := formatThinkingBlock(block.Text)
+					if shouldInsertAssistantParagraphBreak(builder.String(), chunk) {
+						chunk = "\n\n" + chunk
+					}
+					if streamingFunc != nil {
+						if err := streamingFunc(ctx, []byte(chunk)); err != nil {
+							return builder.String(), generationInfo, err
+						}
+					}
+					builder.WriteString(chunk)
+				case assistantContentToolUse:
+					tu := block.ToolUse
+					l.handleToolEvent(ToolEvent{
+						Type:      ToolEventUse,
+						ToolName:  tu.Name,
+						ToolID:    tu.ID,
+						Input:     tu.Input,
+						Timestamp: time.Now(),
+					}, &builder, streamingFunc, ctx)
 				}
-				builder.WriteString(chunk)
-			}
-			// 处理工具调用块
-			for _, tu := range toolUses {
-				l.handleToolEvent(ToolEvent{
-					Type:      ToolEventUse,
-					ToolName:  tu.Name,
-					ToolID:    tu.ID,
-					Input:     tu.Input,
-					Timestamp: time.Now(),
-				}, &builder, streamingFunc, ctx)
 			}
 		case "tool_result":
 			// 处理工具执行结果消息
@@ -482,24 +497,37 @@ type toolUseInfo struct {
 	Input map[string]any
 }
 
-// extractAssistantContent extracts text blocks and tool_use blocks from assistant messages.
+type assistantContentKind int
+
+const (
+	assistantContentText assistantContentKind = iota
+	assistantContentThinking
+	assistantContentToolUse
+)
+
+type assistantContentBlock struct {
+	Kind    assistantContentKind
+	Text    string
+	ToolUse toolUseInfo
+}
+
+// extractAssistantContent extracts ordered text/thinking/tool_use blocks from assistant messages.
 // 参数：payload 为 CLI JSON 行。
-// 返回：文本块、工具调用信息与错误。
-func extractAssistantContent(payload map[string]any) ([]string, []toolUseInfo, error) {
+// 返回：有序内容块与错误。
+func extractAssistantContent(payload map[string]any) ([]assistantContentBlock, error) {
 	message, ok := payload["message"].(map[string]any)
 	if !ok {
-		return nil, nil, fmt.Errorf("claude code: assistant message missing 'message'")
+		return nil, fmt.Errorf("claude code: assistant message missing 'message'")
 	}
 
 	content, ok := message["content"]
 	if !ok {
-		return nil, nil, fmt.Errorf("claude code: assistant message missing 'content'")
+		return nil, fmt.Errorf("claude code: assistant message missing 'content'")
 	}
 
 	switch blocks := content.(type) {
 	case []any:
-		var texts []string
-		var toolUses []toolUseInfo
+		var out []assistantContentBlock
 		for _, block := range blocks {
 			blockMap, ok := block.(map[string]any)
 			if !ok {
@@ -510,7 +538,18 @@ func extractAssistantContent(payload map[string]any) ([]string, []toolUseInfo, e
 			case "text":
 				text, _ := blockMap["text"].(string)
 				if text != "" {
-					texts = append(texts, text)
+					out = append(out, assistantContentBlock{
+						Kind: assistantContentText,
+						Text: text,
+					})
+				}
+			case "thinking":
+				text, _ := blockMap["thinking"].(string)
+				if text != "" {
+					out = append(out, assistantContentBlock{
+						Kind: assistantContentThinking,
+						Text: text,
+					})
 				}
 			case "tool_use":
 				tu := toolUseInfo{
@@ -520,18 +559,33 @@ func extractAssistantContent(payload map[string]any) ([]string, []toolUseInfo, e
 				if input, ok := blockMap["input"].(map[string]any); ok {
 					tu.Input = input
 				}
-				toolUses = append(toolUses, tu)
+				out = append(out, assistantContentBlock{
+					Kind:    assistantContentToolUse,
+					ToolUse: tu,
+				})
 			}
 		}
-		return texts, toolUses, nil
+		return out, nil
 	case string:
 		if blocks == "" {
-			return nil, nil, nil
+			return nil, nil
 		}
-		return []string{blocks}, nil, nil
+		return []assistantContentBlock{{
+			Kind: assistantContentText,
+			Text: blocks,
+		}}, nil
 	default:
-		return nil, nil, fmt.Errorf("claude code: unsupported assistant content type: %T", content)
+		return nil, fmt.Errorf("claude code: unsupported assistant content type: %T", content)
 	}
+}
+
+// formatThinkingBlock wraps thinking text in enterprise-wecom compatible think tags.
+func formatThinkingBlock(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return ""
+	}
+	return "<think>" + text + "</think>"
 }
 
 // mergeResultInfo extracts useful fields from result messages.
