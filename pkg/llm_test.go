@@ -105,7 +105,7 @@ func TestReadStreamThinkingTagsEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStream: %v", err)
 	}
-	want := "<think>分析过程</think>\n\n最终答案"
+	want := "\n<think>\n分析过程\n</think>\n最终答案"
 	if got != want {
 		t.Fatalf("unexpected output: got %q want %q", got, want)
 	}
@@ -126,7 +126,7 @@ func TestReadStreamThinkingTagsAggregateBeforeFirstVisibleText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStream: %v", err)
 	}
-	want := "<think>第一段思考</think><think>第二段思考</think>\n\n最终答案"
+	want := "\n<think>\n第一段思考\n</think>\n\n<think>\n第二段思考\n</think>\n最终答案"
 	if got != want {
 		t.Fatalf("unexpected output: got %q want %q", got, want)
 	}
@@ -147,7 +147,7 @@ func TestReadStreamThinkingTagsSuppressAfterVisibleText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("readStream: %v", err)
 	}
-	want := "<think>先分析</think>\n\n第一段正文<think>后续思考</think>\n\n第二段正文"
+	want := "\n<think>\n先分析\n</think>\n第一段正文\n<think>\n后续思考\n</think>\n第二段正文"
 	if got != want {
 		t.Fatalf("unexpected output: got %q want %q", got, want)
 	}

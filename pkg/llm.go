@@ -578,11 +578,12 @@ func extractAssistantContent(payload map[string]any) ([]assistantContentBlock, e
 
 // formatThinkingBlock wraps thinking text in enterprise-wecom compatible think tags.
 func formatThinkingBlock(text string) string {
+	text = strings.ReplaceAll(text, "\r\n", "\n")
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return ""
 	}
-	return "<think>" + text + "</think>"
+	return "\n<think>\n" + text + "\n</think>\n"
 }
 
 // mergeResultInfo extracts useful fields from result messages.
